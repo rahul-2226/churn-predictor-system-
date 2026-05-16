@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Churn Predictor | Next-Gen Customer Analysis</title>
+    <meta name="description" content="Predict and prevent customer churn with AI-powered insights and real-time risk assessment.">
+    <link rel="stylesheet" href="style.css?v=2.70">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <div class="logo-wrapper">
+                <!-- Icon-only sidebar logo removed as per compact style -->
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-page="dashboard" data-title="Dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                </li>
+                <li data-page="predict" data-title="Predict">
+                    <i data-lucide="user-check"></i>
+                </li>
+
+            </ul>
+
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-bar">
+                <div class="header-logo" id="header-logo">
+                    <span>Churn Predictor</span>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <section id="dashboard" class="page active">
+                <div class="page-header">
+                    <h1>Customer Insights</h1>
+                    <div class="actions">
+
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('bulk-upload').click()">
+                                <i data-lucide="upload"></i> <span id="file-name-display">Select File</span>
+                            </button>
+                            <button class="btn btn-primary hidden" id="test-btn">
+                                <i data-lucide="play"></i> Test
+                            </button>
+                            <input type="file" id="bulk-upload" hidden accept=".csv,.xlsx">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-info">
+                            <span class="label">Churn Rate</span>
+                            <h2 id="m-churn-rate">--%</h2>
+                            <span id="t-churn-rate" class="trend neutral">Current Analysis</span>
+                        </div>
+                        <div class="metric-icon churn"><i data-lucide="user-minus"></i></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-info">
+                            <span class="label">High Risk</span>
+                            <h2 id="m-high-risk">--</h2>
+                            <span id="t-high-risk" class="trend neutral">Critical Priority</span>
+                        </div>
+                        <div class="metric-icon risk"><i data-lucide="alert-triangle"></i></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-info">
+                            <span class="label">Total Analyzed</span>
+                            <h2 id="m-total">--</h2>
+                            <span class="trend positive">Live Feed</span>
+                        </div>
+                        <div class="metric-icon total"><i data-lucide="database"></i></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-info">
+                            <span class="label">Model Accuracy</span>
+                            <h2 id="m-accuracy">--%</h2>
+                            <span class="trend positive">Auto-Trained</span>
+                        </div>
+                        <div class="metric-icon total" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i data-lucide="cpu"></i></div>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-card glass">
+                        <h3>Churn Distribution</h3>
+                        <canvas id="churnChart"></canvas>
+                    </div>
+                    <div class="chart-card glass">
+                        <h3>Risk Levels</h3>
+                        <canvas id="riskChart"></canvas>
+                    </div>
+                    <div class="chart-card glass">
+                        <h3>Probability Spread</h3>
+                        <canvas id="probChart"></canvas>
+                    </div>
+                    <div class="chart-card glass">
+                        <h3>Key Risk Factors</h3>
+                        <canvas id="reasonsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Important Factors -->
+                <div id="drivers-section" class="drivers-container glass hidden">
+                    <div class="drivers-header">
+                        <h3>Top Churn Drivers</h3>
+                        <p>These factors have the highest impact on customer churn based on the latest AI analysis.</p>
+                    </div>
+                    <div id="drivers-list" class="drivers-list">
+                        <!-- Drivers will be injected here -->
+                    </div>
+                </div>
+
+                <div class="table-container glass">
+                    <div class="table-header">
+                        <div class="header-left">
+                            <h3>Risk Analysis Report</h3>
+                            <div class="table-tabs-container">
+                                <div class="table-tabs">
+                                    <button class="tab-btn active" data-filter="all">All Customers</button>
+                                    <button class="tab-btn" data-filter="risk">Risk Customers</button>
+                                </div>
+                                <div id="risk-sub-tabs" class="sub-tabs hidden">
+                                    <button class="sub-tab-btn active" data-subfilter="all">All Risk</button>
+                                    <button class="sub-tab-btn" data-subfilter="high">High</button>
+                                    <button class="sub-tab-btn" data-subfilter="medium">Medium</button>
+                                    <button class="sub-tab-btn" data-subfilter="low">Low</button>
+                                </div>
+                            </div>
+                            <div id="table-note" class="table-note"></div>
+                        </div>
+                        <a id="export-excel-btn" href="/api/download?filter_type=all" class="btn btn-secondary hidden">
+                            <i data-lucide="file-spreadsheet"></i> Export View to Excel
+                        </a>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="customer-table">
+                            <thead>
+                                <tr>
+                                    <th>Customer ID</th>
+                                    <th>Churn Prob.</th>
+                                    <th>Risk Level</th>
+                                    <th>Primary Reason</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Data populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-footer">
+                        <a id="download-report" href="/api/download" class="btn btn-secondary hidden" download="churn_analysis_report.csv">
+                            <i data-lucide="download"></i> Download Full Report (CSV)
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Predict Page -->
+            <section id="predict" class="page">
+                <div class="page-header">
+                    <h1>Predict Customer Churn</h1>
+                    <p class="subtitle">Search for a specific customer to see their detailed churn analysis.</p>
+                </div>
+                
+                <div class="search-card glass">
+                    <form id="lookup-form">
+                        <div class="search-group">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="lookup-id-input" placeholder="Enter Customer ID (e.g. CUST0012)..." required>
+                            <button type="submit" class="btn btn-primary">Search Customer</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="lookup-result" class="hidden">
+                    <div class="lookup-summary glass">
+                        <div class="summary-main">
+                            <div class="summary-title">
+                                <span class="label">Analysis for Customer</span>
+                                <h2 id="result-customer-id">--</h2>
+                            </div>
+                            <div class="summary-badge">
+                                <span id="result-badge" class="badge">--</span>
+                            </div>
+                        </div>
+                        
+                        <div class="prob-visualization">
+                            <div class="prob-header">
+                                <span class="label">Churn Probability</span>
+                                <h2 id="result-prob">--%</h2>
+                            </div>
+                            <div class="prob-bar-bg">
+                                <div id="result-prob-bar" class="prob-bar-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div id="primary-factor-box" class="primary-factor hidden">
+                            <div class="factor-icon">
+                                <i data-lucide="alert-octagon"></i>
+                            </div>
+                            <div class="factor-info">
+                                <span class="label">Primary Churn Driver</span>
+                                <h3 id="result-primary-factor">--</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="result-stack">
+                        <div class="result-card glass">
+                            <div class="card-header">
+                                <i data-lucide="user"></i>
+                                <h4>Customer Profile</h4>
+                            </div>
+                            <div id="lookup-details-grid" class="details-grid">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <div class="result-card glass">
+                            <div class="card-header">
+                                <h4>Risk Indicators</h4>
+                            </div>
+                            <ul id="result-reasons" class="reasons-list">
+                                <!-- Populated by JS -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+        </main>
+    </div>
+
+    <!-- Modals / Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="script.js?v=2.70"></script>
+</body>
+</html>

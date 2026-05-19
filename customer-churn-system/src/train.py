@@ -42,12 +42,12 @@ def train_models(csv_path: str) -> dict:
     ) = preprocess_data(df)
 
     # -----------------------------
-    # 3. DEFINE MODELS
+    # 3. DEFINE MODELS (OPTIMIZED FOR SPEED)
     # -----------------------------
     models = {
-        "Logistic Regression": LogisticRegression(max_iter=1000),
-        "Decision Tree": DecisionTreeClassifier(),
-        "Random Forest": RandomForestClassifier(n_estimators=100)
+        "Logistic Regression": LogisticRegression(max_iter=300, tol=1e-2, n_jobs=1),
+        "Decision Tree": DecisionTreeClassifier(max_depth=12),
+        "Random Forest": RandomForestClassifier(n_estimators=30, max_depth=12, n_jobs=1)
     }
 
     best_model = None

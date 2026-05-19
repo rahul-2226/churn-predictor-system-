@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 import pandas as pd
 import joblib
 import os
@@ -76,7 +77,7 @@ async def train(file: UploadFile = File(...)):
     df.to_csv(temp_path, index=False)
     
     try:
-        model_package = train_models(temp_path)
+        model_package = await run_in_threadpool(train_models, temp_path)
         return {
             "status": "success",
             "message": "Model trained successfully",
@@ -92,7 +93,7 @@ async def predict(data: dict):
     Accepts JSON data matching the model's feature space.
     """
     try:
-        result = predict_churn(data)
+        result = await run_in_threadpool(predict_churn, data)
         return {"status": "success", "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -126,36 +127,18 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         df.to_csv(temp_path, index=False)
 
         # 1. Automatically train the model on the new data
-        model_package = train_models(temp_path)
+        model_package = await run_in_threadpool(train_models, temp_path)
         accuracy = model_package.get("accuracy", 0.85)
 
         # 2. Perform predictions using the newly trained model
-        result_df = bulk_predict(df)
+        result_df = await run_in_threadpool(bulk_predict, df)
         
-        # Replace NaN with None for JSON compatibility
-        result_df = result_df.where(pd.notnull(result_df), None)
+        # Replace NaN/Inf with None for JSON compatibility
+        clean_df = result_df.replace([float('inf'), float('-inf')], float('nan'))
+        clean_df = clean_df.where(pd.notnull(clean_df), None)
         
         # Convert to JSON records with standard Python types
-        records = result_df.to_dict(orient="records")
-        
-        # Helper to convert nested values and handle NaN/Inf
-        def fix_types(d):
-            if isinstance(d, dict):
-                return {k: fix_types(v) for k, v in d.items()}
-            elif isinstance(d, list):
-                return [fix_types(v) for v in d]
-            elif isinstance(d, float):
-                if math.isnan(d) or math.isinf(d):
-                    return None
-                return d
-            elif hasattr(d, "item"): # NumPy scalar
-                val = d.item()
-                if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-                    return None
-                return val
-            return d
-
-        records = fix_types(records)
+        records = clean_df.to_dict(orient="records")
         
         # Calculate summary metrics
         total = len(result_df)
@@ -225,4 +208,5 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

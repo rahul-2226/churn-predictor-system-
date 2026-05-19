@@ -80,16 +80,11 @@ def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
     # -----------------------------
     for column, encoder in encoders.items():
         if column in prediction_df.columns:
-            # Force to string and handle unseen labels by mapping them to the most frequent label or a default
-            # For simplicity in this prototype, we use transform and catch errors
-            try:
-                prediction_df[column] = encoder.transform(prediction_df[column].astype(str))
-            except ValueError:
-                # If unseen label, use the first known label as fallback
-                first_label = encoder.classes_[0]
-                prediction_df[column] = prediction_df[column].astype(str).apply(
-                    lambda x: encoder.transform([x])[0] if x in encoder.classes_ else encoder.transform([first_label])[0]
-                )
+            series_str = prediction_df[column].astype(str)
+            known_classes = set(encoder.classes_)
+            first_label = encoder.classes_[0]
+            series_str = series_str.where(series_str.isin(known_classes), first_label)
+            prediction_df[column] = encoder.transform(series_str)
 
     # Ensure the dataframe features match the exact order and presence expected by the model
     # Add missing columns with 0
@@ -132,23 +127,19 @@ def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
     # -----------------------------
     churn_reasons = []
     ignore_keywords = ["id", "name", "row", "churn", "exited", "status", "leave"]
+    valid_cols = [col for col in df.columns if not any(k in col.lower() for k in ignore_keywords)]
     
-    for _, row in df.iterrows():
+    records = df.to_dict(orient="records")
+    for row in records:
         reasons = []
-        for column, value in row.items():
-            col_lower = column.lower()
-            if any(k in col_lower for k in ignore_keywords):
-                continue
-            
-            # Numerical heuristic checks
+        for column in valid_cols:
+            value = row[column]
             if isinstance(value, (int, float)) and not pd.isna(value):
                 if value < 3:
                     reasons.append(f"Low {column}")
                 if value > 1000:
                     reasons.append(f"High {column}")
-                    
-            # Categorical / Text heuristic checks
-            if isinstance(value, str):
+            elif isinstance(value, str):
                 val_lower = value.lower()
                 if "month" in val_lower:
                     reasons.append("Month-to-month contract")

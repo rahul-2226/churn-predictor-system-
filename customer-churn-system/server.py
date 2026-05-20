@@ -135,7 +135,7 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         
         # Replace NaN/Inf with None for JSON compatibility
         clean_df = result_df.replace([float('inf'), float('-inf')], float('nan'))
-        clean_df = clean_df.where(pd.notnull(clean_df), None)
+        clean_df = clean_df.astype(object).where(pd.notnull(clean_df), None)
         
         # Convert to JSON records with standard Python types
         records = clean_df.to_dict(orient="records")
@@ -152,13 +152,19 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         if math.isnan(accuracy_val) or math.isinf(accuracy_val):
             accuracy_val = 0
             
+        feature_importances = model_package.get("feature_importance", [])
+        safe_importances = [
+            {"feature": f["feature"], "importance": 0 if math.isnan(f["importance"]) else f["importance"]}
+            for f in feature_importances
+        ]
+            
         summary = {
             "total_customers": total,
             "churn_customers": churn_count,
             "churn_rate": churn_rate if not math.isnan(churn_rate) else 0,
             "high_risk_customers": high_risk,
             "accuracy": accuracy_val,
-            "feature_importance": model_package.get("feature_importance", [])
+            "feature_importance": safe_importances
         }
 
         # Store for download

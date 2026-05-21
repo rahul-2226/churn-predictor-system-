@@ -137,8 +137,14 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         clean_df = result_df.replace([float('inf'), float('-inf')], float('nan'))
         clean_df = clean_df.astype(object).where(pd.notnull(clean_df), None)
         
+        # Sort by Churn_Probability descending to surface the most at-risk customers first
+        sorted_clean_df = clean_df.sort_values(by="Churn_Probability", ascending=False)
+        
+        # Limit to top 1000 records for the dashboard preview (prevents OOM and browser crashes)
+        preview_df = sorted_clean_df.head(1000)
+        
         # Convert to JSON records with standard Python types
-        records = clean_df.to_dict(orient="records")
+        records = preview_df.to_dict(orient="records")
         
         # Calculate summary metrics
         total = len(result_df)

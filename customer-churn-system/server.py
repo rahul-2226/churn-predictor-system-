@@ -236,6 +236,8 @@ async def download_results(filter_type: str = Query("all")):
         df_out = df_out[df_out["Risk_Level"] == "Medium Risk"]
     elif filter_type == "low":
         df_out = df_out[df_out["Risk_Level"] == "Low Risk"]
+    elif filter_type == "risk":
+        df_out = df_out[df_out["Risk_Level"].isin(["High Risk", "Medium Risk"])]
     
     file_path = UPLOADS_DIR / f"churn_report_{filter_type}.csv"
     df_out.to_csv(file_path, index=False)
@@ -245,6 +247,60 @@ async def download_results(filter_type: str = Query("all")):
         filename=f"churn_analysis_{filter_type}.csv",
         media_type="text/csv"
     )
+
+@app.get("/api/customer/{customer_id}")
+async def get_customer(customer_id: str):
+    """
+    Looks up a specific customer by ID in the full bulk prediction dataset.
+    This resolves the issue where customers outside the preview limit could not be searched.
+    """
+    global LAST_ANALYSIS_RESULTS
+    if LAST_ANALYSIS_RESULTS is None:
+        raise HTTPException(status_code=404, detail="No analysis results available. Please upload a dataset first.")
+    
+    df = LAST_ANALYSIS_RESULTS
+    keys = list(df.columns)
+    
+    # 1. Exact matches (highest priority)
+    exact_matches = ['customerID', 'CustomerID', 'Customer_ID', 'id', 'ID', 'cid', 'CID', 'CustID']
+    id_col = next((k for k in keys if k in exact_matches), None)
+    
+    # 2. Partial matches (excluding prediction features)
+    if not id_col:
+        feature_keywords = ['tfidf', 'score', 'probability', 'prob', 'rate', 'prediction', 'result']
+        id_col = next((k for k in keys if 'id' in k.lower() and not any(fk in k.lower() for fk in feature_keywords)), None)
+        
+    # 3. Surname fallback
+    if not id_col and 'Surname' in keys:
+        id_col = 'Surname'
+        
+    # 4. Fallback: first column that isn't a prediction result
+    if not id_col:
+        reserved = ['Churn_Prediction', 'Churn_Probability', 'Risk_Level', 'Possible_Reasons']
+        id_col = next((k for k in keys if k not in reserved), None)
+        
+    if not id_col:
+        raise HTTPException(status_code=404, detail="Could not identify Customer ID column in the dataset.")
+        
+    # Case-insensitive string search
+    match_mask = df[id_col].astype(str).str.strip().str.lower() == customer_id.strip().lower()
+    match_df = df[match_mask]
+    
+    if match_df.empty:
+        raise HTTPException(status_code=404, detail=f"Customer ID '{customer_id}' not found.")
+        
+    customer_record = match_df.iloc[0].to_dict()
+    
+    # Ensure NaN/Inf values are replaced with None for JSON compliance
+    for k, v in list(customer_record.items()):
+        if isinstance(v, float):
+            if math.isnan(v) or math.isinf(v):
+                customer_record[k] = None
+        elif pd.isna(v):
+            customer_record[k] = None
+            
+    return {"status": "success", "customer": customer_record}
+
 
 # Mount static files (frontend)
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

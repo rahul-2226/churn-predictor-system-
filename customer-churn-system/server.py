@@ -141,8 +141,8 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         # Combine them
         preview_df = pd.concat([high_risk_df, medium_risk_df, low_risk_df])
         
-        # Sort the combined preview by Churn_Probability descending to surface the most at-risk customers first
-        preview_df = preview_df.sort_values(by="Churn_Probability", ascending=False)
+        # Sort the combined preview by its index to preserve the original dataset order
+        preview_df = preview_df.sort_index()
         
         # Replace NaN/Inf with None for JSON compatibility on the 1000 preview rows ONLY
         clean_preview_df = preview_df.replace([float('inf'), float('-inf')], float('nan'))

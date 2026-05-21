@@ -149,9 +149,29 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         # Calculate summary metrics
         total = len(result_df)
         churn_count = int(result_df["Churn_Prediction"].sum())
+        retained_count = total - churn_count
         churn_rate = round((churn_count / total) * 100, 2) if total > 0 else 0
         
         high_risk = len(result_df[result_df["Risk_Level"] == "High Risk"])
+        medium_risk = len(result_df[result_df["Risk_Level"] == "Medium Risk"])
+        low_risk = total - high_risk - medium_risk
+        
+        # Calculate probability buckets for the entire dataset
+        prob_series = result_df["Churn_Probability"]
+        prob_buckets = [
+            int((prob_series < 20).sum()),
+            int(((prob_series >= 20) & (prob_series < 40)).sum()),
+            int(((prob_series >= 40) & (prob_series < 60)).sum()),
+            int(((prob_series >= 60) & (prob_series < 80)).sum()),
+            int((prob_series >= 80).sum())
+        ]
+        
+        # Calculate churn reasons distribution for the entire dataset
+        reason_counts = {}
+        at_risk_df = result_df[(result_df["Risk_Level"] != "Low Risk") & (result_df["Possible_Reasons"] != "Normal")]
+        if not at_risk_df.empty:
+            reasons_series = at_risk_df["Possible_Reasons"].str.split(", ").explode()
+            reason_counts = reasons_series.value_counts().to_dict()
         
         # Ensure summary values are JSON safe
         accuracy_val = round(accuracy * 100, 2) if accuracy else 0
@@ -170,7 +190,13 @@ async def bulk_predict_api(file: UploadFile = File(...)):
             "churn_rate": churn_rate if not math.isnan(churn_rate) else 0,
             "high_risk_customers": high_risk,
             "accuracy": accuracy_val,
-            "feature_importance": safe_importances
+            "feature_importance": safe_importances,
+            "charts": {
+                "churn_dist": [retained_count, churn_count],
+                "risk_dist": [low_risk, medium_risk, high_risk],
+                "prob_buckets": prob_buckets,
+                "reason_counts": reason_counts
+            }
         }
 
         # Store for download

@@ -75,9 +75,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (currentFilter === 'risk') {
                 riskSubTabs.classList.remove('hidden');
-                currentSubFilter = 'all'; // Default to all risk
+                currentSubFilter = 'high'; // Default to high risk
                 subTabBtns.forEach(b => b.classList.remove('active'));
-                subTabBtns[0].classList.add('active'); // "All Risk"
+                subTabBtns[0].classList.add('active'); // "High"
             } else {
                 riskSubTabs.classList.add('hidden');
             }

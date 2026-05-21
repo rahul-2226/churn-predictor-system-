@@ -303,7 +303,7 @@ async def get_customer(customer_id: str):
 
 
 # Mount static files (frontend)
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/", StaticFiles(directory=str(BASE_DIR / "frontend"), html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

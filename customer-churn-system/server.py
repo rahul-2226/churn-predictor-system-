@@ -133,11 +133,16 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         # 2. Perform predictions using the newly trained model
         result_df = await run_in_threadpool(bulk_predict, df)
         
-        # Sort by Churn_Probability descending to surface the most at-risk customers first
-        sorted_result_df = result_df.sort_values(by="Churn_Probability", ascending=False)
+        # Get up to 1000 of each risk level, sorted by probability descending to balance the preview
+        high_risk_df = result_df[result_df["Risk_Level"] == "High Risk"].sort_values(by="Churn_Probability", ascending=False).head(1000)
+        medium_risk_df = result_df[result_df["Risk_Level"] == "Medium Risk"].sort_values(by="Churn_Probability", ascending=False).head(1000)
+        low_risk_df = result_df[result_df["Risk_Level"] == "Low Risk"].sort_values(by="Churn_Probability", ascending=False).head(1000)
         
-        # Limit to top 1000 records for the dashboard preview (prevents OOM and browser crashes)
-        preview_df = sorted_result_df.head(1000)
+        # Combine them
+        preview_df = pd.concat([high_risk_df, medium_risk_df, low_risk_df])
+        
+        # Sort the combined preview by Churn_Probability descending to surface the most at-risk customers first
+        preview_df = preview_df.sort_values(by="Churn_Probability", ascending=False)
         
         # Replace NaN/Inf with None for JSON compatibility on the 1000 preview rows ONLY
         clean_preview_df = preview_df.replace([float('inf'), float('-inf')], float('nan'))

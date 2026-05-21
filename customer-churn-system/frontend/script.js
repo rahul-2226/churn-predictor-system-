@@ -568,7 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Download Logic is now handled by native <a> tag in index.html
 
-    window.showCustomerDetails = (searchId) => {
+    window.showCustomerDetails = async (searchId) => {
         searchId = searchId.toString().trim().toLowerCase();
         
         if (allRecords.length === 0) {
@@ -576,10 +576,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const customer = allRecords.find(r => {
+        // 1. Try local search first for speed
+        let customer = allRecords.find(r => {
             const id = getCustomerID(r);
             return id.toString().toLowerCase() === searchId;
         });
+
+        // 2. If not found in local preview, fetch from backend to search the full dataset
+        if (!customer) {
+            try {
+                const response = await fetch(`/api/customer/${encodeURIComponent(searchId)}`);
+                if (response.ok) {
+                    const resData = await response.json();
+                    if (resData.status === 'success') {
+                        customer = resData.customer;
+                    }
+                }
+            } catch (err) {
+                console.error("Error looking up customer from backend:", err);
+            }
+        }
 
         if (!customer) {
             alert(`Customer ID '${searchId}' not found in the uploaded dataset.`);

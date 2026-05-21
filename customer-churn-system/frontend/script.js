@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Charts Initialization
     let churnChart, riskChart, probChart, reasonsChart;
 
-    const initCharts = (data = []) => {
+    const initCharts = (data = [], chartStats = null) => {
         const churnCtx = document.getElementById('churnChart').getContext('2d');
         const riskCtx = document.getElementById('riskChart').getContext('2d');
 
@@ -110,19 +110,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (probChart) probChart.destroy();
         if (reasonsChart) reasonsChart.destroy();
 
-        const churnDist = data.length > 0 ? 
+        const churnDist = chartStats ? chartStats.churn_dist : (
+            data.length > 0 ? 
             [data.filter(d => d.Churn_Prediction === 0).length, data.filter(d => d.Churn_Prediction === 1).length] : 
-            [0, 0];
+            [0, 0]
+        );
 
-        const riskDist = data.length > 0 ?
+        const riskDist = chartStats ? chartStats.risk_dist : (
+            data.length > 0 ?
             [
                 data.filter(d => d.Risk_Level === 'Low Risk').length,
                 data.filter(d => d.Risk_Level === 'Medium Risk').length,
                 data.filter(d => d.Risk_Level === 'High Risk').length
-            ] : [0, 0, 0];
+            ] : [0, 0, 0]
+        );
 
         let probBuckets = [0, 0, 0, 0, 0]; // 0-20, 20-40, 40-60, 60-80, 80-100
-        if (data.length > 0) {
+        if (chartStats) {
+            probBuckets = chartStats.prob_buckets;
+        } else if (data.length > 0) {
             data.forEach(d => {
                 let p = d.Churn_Probability;
                 if (p < 20) probBuckets[0]++;
@@ -206,7 +212,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // REASONS CHART LOGIC
         let reasonCounts = {};
-        if (data.length > 0) {
+        if (chartStats) {
+            reasonCounts = Object.keys(chartStats.reason_counts).length > 0 ? chartStats.reason_counts : { "No significant risk factors": 0 };
+        } else if (data.length > 0) {
             data.forEach(d => {
                 if (d.Risk_Level !== 'Low Risk' && d.Possible_Reasons && d.Possible_Reasons !== 'Normal') {
                     const reasons = d.Possible_Reasons.split(', ');
@@ -526,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
             driversSection.classList.add('hidden');
         }
 
-        initCharts(records);
+        initCharts(records, summary.charts);
         renderTableWithFilters();
         lucide.createIcons();
     };

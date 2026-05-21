@@ -27,6 +27,12 @@ def train_models(csv_path: str) -> dict:
     # -----------------------------
     df = pd.read_csv(csv_path, low_memory=False)
 
+    # Downsample if dataset is very large to speed up training and prevent timeouts (e.g. Render 30s limit)
+    if len(df) > 20000:
+        df_train = df.sample(n=20000, random_state=42)
+    else:
+        df_train = df
+
     # -----------------------------
     # 2. PREPROCESS DATA
     # -----------------------------
@@ -39,7 +45,7 @@ def train_models(csv_path: str) -> dict:
         target_column,
         encoders,
         target_encoder
-    ) = preprocess_data(df)
+    ) = preprocess_data(df_train)
 
     # -----------------------------
     # 3. DEFINE MODELS (OPTIMIZED FOR SPEED)

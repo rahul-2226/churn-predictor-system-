@@ -125,29 +125,37 @@ def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
     # -----------------------------
     # 7. DYNAMIC CHURN REASONS (HEURISTICS)
     # -----------------------------
-    churn_reasons = []
     ignore_keywords = ["id", "name", "row", "churn", "exited", "status", "leave"]
     valid_cols = [col for col in df.columns if not any(k in col.lower() for k in ignore_keywords)]
     
-    records = df.to_dict(orient="records")
-    for row in records:
-        reasons = []
-        for column in valid_cols:
-            value = row[column]
-            if isinstance(value, (int, float)) and not pd.isna(value):
-                if value < 3:
-                    reasons.append(f"Low {column}")
-                if value > 1000:
-                    reasons.append(f"High {column}")
-            elif isinstance(value, str):
-                val_lower = value.lower()
-                if "month" in val_lower:
-                    reasons.append("Month-to-month contract")
-                if "no" == val_lower:
-                    reasons.append(f"No {column}")
-                    
-        churn_reasons.append(", ".join(reasons) if reasons else "Normal")
-
-    result_df["Possible_Reasons"] = churn_reasons
+    # Only calculate reasons for Medium/High risk customers (prob >= 0.40) to save processing time
+    is_at_risk = probabilities >= 0.40
+    
+    # Initialize a list of lists of reasons
+    reasons_list = [[] for _ in range(len(df))]
+    
+    for col in valid_cols:
+        series = df[col]
+        if pd.api.types.is_numeric_dtype(series):
+            # Numeric checks: vectorized
+            low_mask = (series < 3) & is_at_risk
+            high_mask = (series > 1000) & is_at_risk
+            
+            for idx in np.where(low_mask)[0]:
+                reasons_list[idx].append(f"Low {col}")
+            for idx in np.where(high_mask)[0]:
+                reasons_list[idx].append(f"High {col}")
+        else:
+            # String checks
+            str_series = series.astype(str).str.lower()
+            month_mask = str_series.str.contains("month", na=False) & is_at_risk
+            no_mask = (str_series == "no") & is_at_risk
+            
+            for idx in np.where(month_mask)[0]:
+                reasons_list[idx].append("Month-to-month contract")
+            for idx in np.where(no_mask)[0]:
+                reasons_list[idx].append(f"No {col}")
+                
+    result_df["Possible_Reasons"] = [", ".join(r) if r else "Normal" for r in reasons_list]
 
     return result_df

@@ -340,8 +340,11 @@ document.addEventListener('DOMContentLoaded', () => {
             exportBtn.href = `/api/download?filter_type=${downloadParam}`;
             
             // Update note about remaining rows if applicable
+            const totalVal = parseInt(document.getElementById('m-total').innerText.replace(/,/g, '')) || 0;
             const existingNote = document.getElementById('table-note');
-            if (data.length > 10) {
+            if (totalVal > 1000) {
+                existingNote.innerText = `Showing top 1,000 at-risk customers (sorted by probability). Use Export to Excel to download all ${totalVal.toLocaleString()} records.`;
+            } else if (data.length > 10) {
                 let typeLabel = 'All Customers';
                 if (currentFilter === 'risk') {
                     if (currentSubFilter === 'high') typeLabel = 'High Risk Customers';
@@ -360,42 +363,58 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Re-initialize icons in table
         lucide.createIcons();
-    };
-
-    // Handle file processing for bulk upload
-    const processBulkFile = async (file) => {
-        if (!file) return;
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        // Find the Test button
-        const testBtn = document.getElementById('test-btn');
-        const originalText = testBtn.innerHTML;
-        testBtn.innerHTML = '<div class="loader-sm"></div> Analyzing...';
-        testBtn.disabled = true;
-
-        try {
-            const response = await fetch('/api/bulk-predict', { method: 'POST', body: formData });
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || 'Upload failed');
-            }
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                allRecords = data.data;
-                displayedCount = 10;
-                updateDashboard(data);
-                document.getElementById('download-report').classList.remove('hidden');
-                
-                // Show a quick success toast
-                alert('Dataset processed successfully!');
-            }
-        } catch (err) { 
-            console.error('Bulk Upload Error:', err);
-            alert('Bulk analysis failed: ' + err.message); 
-        }
+     };
+ 
+     // Handle file processing for bulk upload
+     const processBulkFile = async (file) => {
+         if (!file) return;
+         
+         const formData = new FormData();
+         formData.append('file', file);
+         
+         // Find the Test button
+         const testBtn = document.getElementById('test-btn');
+         const originalText = testBtn.innerHTML;
+         testBtn.innerHTML = '<div class="loader-sm"></div> Analyzing...';
+         testBtn.disabled = true;
+ 
+         try {
+             const response = await fetch('/api/bulk-predict', { method: 'POST', body: formData });
+             if (!response.ok) {
+                 let errMsg = 'Upload failed';
+                 try {
+                     const err = await response.json();
+                     errMsg = err.detail || errMsg;
+                 } catch (jsonErr) {
+                     try {
+                         const txt = await response.text();
+                         if (txt.includes('<title>')) {
+                             const match = txt.match(/<title>(.*?)<\/title>/);
+                             errMsg = match ? match[1] : `Error ${response.status}`;
+                         } else {
+                             errMsg = txt.substring(0, 100) || `Error ${response.status}`;
+                         }
+                     } catch (txtErr) {
+                         errMsg = `Error ${response.status}: ${response.statusText}`;
+                     }
+                 }
+                 throw new Error(errMsg);
+             }
+             const data = await response.json();
+             
+             if (data.status === 'success') {
+                 allRecords = data.data;
+                 displayedCount = 10;
+                 updateDashboard(data);
+                 document.getElementById('download-report').classList.remove('hidden');
+                 
+                 // Show a quick success toast
+                 alert('Dataset processed successfully!');
+             }
+         } catch (err) { 
+             console.error('Bulk Upload Error:', err);
+             alert('Bulk analysis failed: ' + err.message); 
+         }
         finally {
             testBtn.innerHTML = originalText;
             testBtn.disabled = false;

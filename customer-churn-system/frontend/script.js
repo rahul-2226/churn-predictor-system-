@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let displayedCount = 10; // How many records to show
     let currentFilter = 'all'; // 'all' or 'risk'
     let currentSubFilter = 'all'; // 'all', 'high', 'medium', 'low'
+    let currentSummary = null; // Store summary metrics for tab labels
 
     // Navigation logic
     const navLinks = document.querySelectorAll('.nav-links li');
@@ -316,7 +317,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTable = (data) => {
         const tbody = document.querySelector('#customer-table tbody');
         const exportBtn = document.getElementById('export-excel-btn');
+        const existingNote = document.getElementById('table-note');
         tbody.innerHTML = '';
+        if (existingNote) existingNote.innerText = '';
         
         if (!data || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No records found.</td></tr>';
@@ -348,10 +351,31 @@ document.addEventListener('DOMContentLoaded', () => {
             exportBtn.href = `/api/download?filter_type=${downloadParam}`;
             
             // Update note about remaining rows if applicable
-            const totalVal = parseInt(document.getElementById('m-total').innerText.replace(/,/g, '')) || 0;
-            const existingNote = document.getElementById('table-note');
+            const totalVal = currentSummary ? currentSummary.total_customers : 0;
             if (totalVal > 1000) {
-                existingNote.innerText = `Showing top 1,000 at-risk customers (sorted by probability). Use Export to CSV to download all ${totalVal.toLocaleString()} records.`;
+                let noteText = '';
+                if (currentFilter === 'all') {
+                    noteText = `Showing preview of up to 3,000 customers (top 1,000 per risk level).`;
+                } else if (currentFilter === 'risk') {
+                    if (currentSubFilter === 'high') {
+                        const totalHigh = currentSummary ? currentSummary.high_risk_customers : 0;
+                        noteText = `Showing top 1,000 of ${totalHigh.toLocaleString()} High Risk customers.`;
+                    } else if (currentSubFilter === 'medium') {
+                        const totalMedium = currentSummary && currentSummary.charts ? currentSummary.charts.risk_dist[1] : 0;
+                        noteText = `Showing top 1,000 of ${totalMedium.toLocaleString()} Medium Risk customers.`;
+                    } else if (currentSubFilter === 'low') {
+                        const totalLow = currentSummary && currentSummary.charts ? currentSummary.charts.risk_dist[0] : 0;
+                        noteText = `Showing top 1,000 of ${totalLow.toLocaleString()} Low Risk customers.`;
+                    } else {
+                        const totalHigh = currentSummary ? currentSummary.high_risk_customers : 0;
+                        const totalMedium = currentSummary && currentSummary.charts ? currentSummary.charts.risk_dist[1] : 0;
+                        const totalRisk = totalHigh + totalMedium;
+                        noteText = `Showing top 2,000 of ${totalRisk.toLocaleString()} at-risk customers.`;
+                    }
+                }
+                if (existingNote) {
+                    existingNote.innerText = `${noteText} Use Export to CSV to download the complete report.`;
+                }
             } else if (data.length > 10) {
                 let typeLabel = 'All Customers';
                 if (currentFilter === 'risk') {
@@ -361,9 +385,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     else typeLabel = 'Risk Customers';
                 }
                 
-                existingNote.innerText = `Showing all ${data.length} ${typeLabel}. Use Export to CSV for full report download.`;
+                if (existingNote) {
+                    existingNote.innerText = `Showing all ${data.length} ${typeLabel}. Use Export to CSV for full report download.`;
+                }
             } else {
-                existingNote.innerText = '';
+                if (existingNote) existingNote.innerText = '';
             }
         } else {
             exportBtn.classList.add('hidden');
@@ -483,6 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateDashboard = (data) => {
         const { summary, data: records } = data;
+        currentSummary = summary;
 
         document.getElementById('m-churn-rate').innerText = `${summary.churn_rate}%`;
         document.getElementById('m-high-risk').innerText = summary.high_risk_customers;

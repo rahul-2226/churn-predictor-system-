@@ -133,18 +133,18 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         # 2. Perform predictions using the newly trained model
         result_df = await run_in_threadpool(bulk_predict, df)
         
-        # Replace NaN/Inf with None for JSON compatibility
-        clean_df = result_df.replace([float('inf'), float('-inf')], float('nan'))
-        clean_df = clean_df.astype(object).where(pd.notnull(clean_df), None)
-        
         # Sort by Churn_Probability descending to surface the most at-risk customers first
-        sorted_clean_df = clean_df.sort_values(by="Churn_Probability", ascending=False)
+        sorted_result_df = result_df.sort_values(by="Churn_Probability", ascending=False)
         
         # Limit to top 1000 records for the dashboard preview (prevents OOM and browser crashes)
-        preview_df = sorted_clean_df.head(1000)
+        preview_df = sorted_result_df.head(1000)
+        
+        # Replace NaN/Inf with None for JSON compatibility on the 1000 preview rows ONLY
+        clean_preview_df = preview_df.replace([float('inf'), float('-inf')], float('nan'))
+        clean_preview_df = clean_preview_df.astype(object).where(pd.notnull(clean_preview_df), None)
         
         # Convert to JSON records with standard Python types
-        records = preview_df.to_dict(orient="records")
+        records = clean_preview_df.to_dict(orient="records")
         
         # Calculate summary metrics
         total = len(result_df)
@@ -206,13 +206,13 @@ async def download_results(filter_type: str = Query("all")):
     elif filter_type == "low":
         df_out = df_out[df_out["Risk_Level"] == "Low Risk"]
     
-    file_path = UPLOADS_DIR / f"churn_report_{filter_type}.xlsx"
-    df_out.to_excel(file_path, index=False)
+    file_path = UPLOADS_DIR / f"churn_report_{filter_type}.csv"
+    df_out.to_csv(file_path, index=False)
     
     return FileResponse(
         path=file_path,
-        filename=f"churn_analysis_{filter_type}.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        filename=f"churn_analysis_{filter_type}.csv",
+        media_type="text/csv"
     )
 
 # Mount static files (frontend)

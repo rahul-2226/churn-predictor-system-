@@ -343,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalVal = parseInt(document.getElementById('m-total').innerText.replace(/,/g, '')) || 0;
             const existingNote = document.getElementById('table-note');
             if (totalVal > 1000) {
-                existingNote.innerText = `Showing top 1,000 at-risk customers (sorted by probability). Use Export to Excel to download all ${totalVal.toLocaleString()} records.`;
+                existingNote.innerText = `Showing top 1,000 at-risk customers (sorted by probability). Use Export to CSV to download all ${totalVal.toLocaleString()} records.`;
             } else if (data.length > 10) {
                 let typeLabel = 'All Customers';
                 if (currentFilter === 'risk') {
@@ -353,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     else typeLabel = 'Risk Customers';
                 }
                 
-                existingNote.innerText = `Showing all ${data.length} ${typeLabel}. Use Export to Excel for full report download.`;
+                existingNote.innerText = `Showing all ${data.length} ${typeLabel}. Use Export to CSV for full report download.`;
             } else {
                 existingNote.innerText = '';
             }

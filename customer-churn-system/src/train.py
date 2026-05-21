@@ -45,9 +45,9 @@ def train_models(csv_path: str) -> dict:
     # 3. DEFINE MODELS (OPTIMIZED FOR SPEED)
     # -----------------------------
     models = {
-        "Logistic Regression": LogisticRegression(max_iter=300, tol=1e-2, n_jobs=1),
-        "Decision Tree": DecisionTreeClassifier(max_depth=12),
-        "Random Forest": RandomForestClassifier(n_estimators=30, max_depth=12, n_jobs=1)
+        "Logistic Regression": LogisticRegression(max_iter=300, tol=1e-2, n_jobs=1, random_state=42),
+        "Decision Tree": DecisionTreeClassifier(max_depth=12, random_state=42),
+        "Random Forest": RandomForestClassifier(n_estimators=30, max_depth=12, n_jobs=1, random_state=42)
     }
 
     best_model = None

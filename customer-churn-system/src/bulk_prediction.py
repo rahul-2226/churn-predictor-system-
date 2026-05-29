@@ -4,21 +4,9 @@ import numpy as np
 from pathlib import Path
 
 def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Processes a bulk dataset, applies the pre-trained machine learning model to predict churn,
-    and appends risk levels and potential churn reasons to the original dataset.
-
-    Args:
-        df (pd.DataFrame): The raw customer data uploaded by the user.
-
-    Returns:
-        pd.DataFrame: The original data appended with 'Churn_Prediction', 
-                      'Churn_Probability', 'Risk_Level', and 'Possible_Reasons'.
-    """
+    """Predict churn for a dataset and add result columns."""
     
-    # -----------------------------
-    # 1. LOAD MODEL & METADATA
-    # -----------------------------
+    # Load trained model and metadata
     model_path = Path("models") / "best_churn_model.pkl"
     if not model_path.exists():
         raise Exception("Model file not found. Please train a model first.")
@@ -29,19 +17,16 @@ def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
     feature_names = list(model_package["feature_names"])
     encoders = model_package["encoders"]
 
-    # -----------------------------
-    # 2. PREPARE DATAFRAME FOR PREDICTION
-    # -----------------------------
+    # Prepare the dataframe for prediction
     prediction_df = df.copy()
 
-    # Match types to training data (Convert to numeric where possible)
+    # Convert numeric-like fields to numeric type
     for column in prediction_df.columns:
         if column in feature_names and column not in encoders:
-            # This was a numeric column during training
             if prediction_df[column].dtype == object or str(prediction_df[column].dtype).startswith('string'):
                 prediction_df[column] = pd.to_numeric(prediction_df[column], errors='coerce')
 
-    # Remove non-informative ID columns (synchronized with preprocessing)
+    # Drop ID-like columns that are not model features
     id_keywords = ["id", "name", "row", "index"]
     feature_keywords = ["tfidf", "score", "rate", "prob", "mean", "std", "min", "max"]
     
@@ -59,25 +44,19 @@ def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
             if col not in feature_names:
                 prediction_df.drop(col, axis=1, inplace=True)
 
-    # -----------------------------
-    # 3. HANDLE MISSING VALUES
-    # -----------------------------
+    # Handle missing values for every column
     for column in prediction_df.columns:
         if pd.api.types.is_numeric_dtype(prediction_df[column]):
-            # Numeric: median
             median_val = prediction_df[column].median()
             if pd.isna(median_val):
                 median_val = 0
             prediction_df[column] = prediction_df[column].fillna(median_val)
         else:
-            # Categorical: mode
             mode_series = prediction_df[column].mode()
             mode_val = mode_series[0] if not mode_series.empty else "Unknown"
             prediction_df[column] = prediction_df[column].fillna(mode_val)
 
-    # -----------------------------
-    # 4. ENCODE CATEGORICAL COLUMNS
-    # -----------------------------
+    # Encode categorical fields using saved encoders
     for column, encoder in encoders.items():
         if column in prediction_df.columns:
             series_str = prediction_df[column].astype(str)
@@ -86,31 +65,21 @@ def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
             series_str = series_str.where(series_str.isin(known_classes), first_label)
             prediction_df[column] = encoder.transform(series_str)
 
-    # Ensure the dataframe features match the exact order and presence expected by the model
-    # Add missing columns with 0
+    # Keep model features in the right order
     for col in feature_names:
         if col not in prediction_df.columns:
             prediction_df[col] = 0
-            
-    prediction_df = prediction_df[feature_names]
 
-    # Convert all columns to numeric just in case something slipped through
+    prediction_df = prediction_df[feature_names]
     prediction_df = prediction_df.apply(pd.to_numeric, errors='coerce').fillna(0)
 
-    # -----------------------------
-    # 5. EXECUTE PREDICTIONS
-    # -----------------------------
     predictions = model.predict(prediction_df)
     probabilities = model.predict_proba(prediction_df)[:, 1]
 
-    # -----------------------------
-    # 6. COMPILE RESULTS
-    # -----------------------------
     result_df = df.copy()
     result_df["Churn_Prediction"] = predictions
     result_df["Churn_Probability"] = (probabilities * 100).round(2)
 
-    # Calculate Risk Levels
     risk_levels = []
     for prob in probabilities:
         if prob >= 0.75:
@@ -119,38 +88,28 @@ def bulk_predict(df: pd.DataFrame) -> pd.DataFrame:
             risk_levels.append("Medium Risk")
         else:
             risk_levels.append("Low Risk")
-            
+
     result_df["Risk_Level"] = risk_levels
 
-    # -----------------------------
-    # 7. DYNAMIC CHURN REASONS (HEURISTICS)
-    # -----------------------------
     ignore_keywords = ["id", "name", "row", "churn", "exited", "status", "leave"]
     valid_cols = [col for col in df.columns if not any(k in col.lower() for k in ignore_keywords)]
-    
-    # Calculate reasons for all customers (including low-risk)
+
     is_at_risk = np.ones(len(df), dtype=bool)
-    
-    # Initialize a list of lists of reasons
     reasons_list = [[] for _ in range(len(df))]
-    
+
     for col in valid_cols:
         series = df[col]
         if pd.api.types.is_numeric_dtype(series):
-            # Numeric checks: vectorized
             low_mask = (series < 3) & is_at_risk
             high_mask = (series > 1000) & is_at_risk
-            
             for idx in np.where(low_mask)[0]:
                 reasons_list[idx].append(f"Low {col}")
             for idx in np.where(high_mask)[0]:
                 reasons_list[idx].append(f"High {col}")
         else:
-            # String checks
             str_series = series.astype(str).str.lower()
             month_mask = str_series.str.contains("month", na=False) & is_at_risk
             no_mask = (str_series == "no") & is_at_risk
-            
             for idx in np.where(month_mask)[0]:
                 reasons_list[idx].append("Month-to-month contract")
             for idx in np.where(no_mask)[0]:

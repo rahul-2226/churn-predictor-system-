@@ -19,9 +19,7 @@ def preprocess_data(df: pd.DataFrame):
                 feature_encoders_dict, target_encoder)
     """
 
-    # -----------------------------
-    # 1. DETECT TARGET COLUMN
-    # -----------------------------
+    # Find churn target column
     possible_targets = ["Churn", "churn", "Exited", "Attrition", "Leave", "Status"]
     target_column = None
 
@@ -39,12 +37,8 @@ def preprocess_data(df: pd.DataFrame):
     if target_column is None:
         raise Exception("No churn target column found in the dataset. Please ensure a column like 'Churn' exists.")
 
-    # -----------------------------
-    # 2. REMOVE ID COLUMNS
-    # -----------------------------
-    # Keywords that usually indicate a non-informative identifier
+    # Drop ID-like columns
     id_keywords = ["id", "name", "row", "index"]
-    # Keywords that suggest a column is actually a feature and should NOT be dropped
     feature_keywords = ["tfidf", "score", "rate", "prob", "mean", "std", "min", "max"]
     
     columns_to_drop = []
@@ -59,68 +53,49 @@ def preprocess_data(df: pd.DataFrame):
     
     df = df.drop(columns=columns_to_drop)
 
-    # -----------------------------
-    # 3. CONVERT NUMERIC COLUMNS
-    # -----------------------------
+    # Convert text columns to numeric when possible
     for column in df.columns:
         if column == target_column:
             continue
             
-        # Try to convert to numeric if it's currently an object/string
         if df[column].dtype == object or str(df[column].dtype).startswith('string'):
             converted = pd.to_numeric(df[column], errors='coerce')
-            # If at least 50% of the column can be converted to numeric, keep it as numeric
             if not converted.isna().all() and (converted.notna().sum() >= len(df) * 0.5):
                 df[column] = converted
 
-    # -----------------------------
-    # 4. HANDLE MISSING VALUES
-    # -----------------------------
+    # Fill missing values
     for column in df.columns:
         if pd.api.types.is_numeric_dtype(df[column]):
-            # Numeric: median
             median_val = df[column].median()
             if pd.isna(median_val):
                 median_val = 0
             df[column] = df[column].fillna(median_val)
         else:
-            # Categorical: mode
             mode_series = df[column].mode()
             mode_val = mode_series[0] if not mode_series.empty else "Unknown"
             df[column] = df[column].fillna(mode_val)
 
-    # -----------------------------
-    # 5. ENCODE TARGET COLUMN
-    # -----------------------------
+    # Encode target column
     target_encoder = LabelEncoder()
     df[target_column] = target_encoder.fit_transform(df[target_column].astype(str))
 
-    # -----------------------------
-    # 6. ENCODE CATEGORICAL FEATURES
-    # -----------------------------
+    # Encode categorical features
     encoders = {}
     for column in df.columns:
         if column == target_column:
             continue
             
-        # If NOT numeric, it MUST be encoded for sklearn
         if not pd.api.types.is_numeric_dtype(df[column]):
             encoder = LabelEncoder()
             df[column] = encoder.fit_transform(df[column].astype(str))
             encoders[column] = encoder
 
-    # -----------------------------
-    # 7. FEATURES & TARGET SPLIT
-    # -----------------------------
+    # Split features and target
     X = df.drop(target_column, axis=1)
     y = df[target_column]
-
-    # Ensure all column names are strings for sklearn
     X.columns = [str(col) for col in X.columns]
 
-    # -----------------------------
-    # 8. TRAIN / TEST SPLIT
-    # -----------------------------
+    # Split data into train and test sets
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )

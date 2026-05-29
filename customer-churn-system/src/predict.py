@@ -3,20 +3,9 @@ import joblib
 from pathlib import Path
 
 def predict_churn(customer_data: dict) -> dict:
-    """
-    Predicts the churn probability and risk level for a single customer.
+    """Predict churn for one customer."""
 
-    Args:
-        customer_data (dict): A dictionary representing a single customer's details.
-
-    Returns:
-        dict: A dictionary containing the boolean prediction, churn probability percentage, 
-              calculated risk level, and heuristic reasons for the risk.
-    """
-
-    # -----------------------------
-    # 1. LOAD MODEL PACKAGE
-    # -----------------------------
+    # Load saved model and metadata
     model_path = Path("models") / "best_churn_model.pkl"
     model_package = joblib.load(model_path)
 
@@ -24,36 +13,24 @@ def predict_churn(customer_data: dict) -> dict:
     feature_names = model_package["feature_names"]
     encoders = model_package["encoders"]
 
-    # -----------------------------
-    # 2. CREATE DATAFRAME
-    # -----------------------------
+    # Create input dataframe
     customer_df = pd.DataFrame([customer_data])
 
-    # -----------------------------
-    # 3. ENCODE CATEGORICAL DATA
-    # -----------------------------
+    # Encode categorical fields
     for column, encoder in encoders.items():
         if column in customer_df.columns:
-            # Force to string to avoid mixed type errors
             customer_df[column] = encoder.transform(customer_df[column].astype(str))
 
-    # -----------------------------
-    # 4. ENSURE FEATURE ORDER
-    # -----------------------------
-    # The model expects columns in the exact order they were trained on
+    # Align feature order to the model
     customer_df = customer_df[feature_names]
 
-    # -----------------------------
-    # 5. PREDICTION
-    # -----------------------------
+    # Predict churn probability
     prediction = model.predict(customer_df)
     probability = model.predict_proba(customer_df)
     
     churn_probability = probability[0][1]
 
-    # -----------------------------
-    # 6. DYNAMIC RISK LEVEL
-    # -----------------------------
+    # Determine risk level
     if churn_probability >= 0.75:
         risk_level = "High Risk"
     elif churn_probability >= 0.40:
@@ -61,9 +38,7 @@ def predict_churn(customer_data: dict) -> dict:
     else:
         risk_level = "Low Risk"
 
-    # -----------------------------
-    # 7. DYNAMIC REASON ANALYSIS
-    # -----------------------------
+    # Build reason list
     reasons = []
     ignore_keywords = ["id", "name", "row", "churn", "exited", "status", "leave"]
 

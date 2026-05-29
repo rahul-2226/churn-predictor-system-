@@ -15,7 +15,6 @@ from src.bulk_prediction import bulk_predict
 
 app = FastAPI()
 
-# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,13 +22,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Paths
 BASE_DIR = Path(__file__).parent
 MODELS_DIR = BASE_DIR / "models"
 UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
-
-# Global state for prototype (in-memory storage)
 LAST_ANALYSIS_RESULTS = None
 
 @app.get("/api/model-info")
@@ -43,11 +39,9 @@ async def get_model_info():
         return {"status": "error", "message": "Model not trained yet"}
     
     model_package = joblib.load(model_path)
-    
-    # Convert feature names to standard list
+
     feature_names = list(model_package["feature_names"])
     
-    # Convert encoder classes to standard Python types
     processed_encoders = {}
     for k, v in model_package["encoders"].items():
         classes = v.classes_
@@ -55,7 +49,6 @@ async def get_model_info():
             classes = classes.tolist()
         else:
             classes = list(classes)
-        # Ensure all elements in the list are JSON serializable
         processed_encoders[k] = [x.item() if hasattr(x, "item") else x for x in classes]
 
     return {
@@ -122,36 +115,25 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         if df.empty:
             raise HTTPException(status_code=400, detail="The uploaded file is empty.")
 
-        # Save to temp for training
         temp_path = UPLOADS_DIR / "auto_train_data.csv"
         df.to_csv(temp_path, index=False)
 
-        # 1. Automatically train the model on the new data
         model_package = await run_in_threadpool(train_models, temp_path)
         accuracy = model_package.get("accuracy", 0.85)
 
-        # 2. Perform predictions using the newly trained model
         result_df = await run_in_threadpool(bulk_predict, df)
         
-        # Get up to 1000 of each risk level, sorted by probability descending to balance the preview
         high_risk_df = result_df[result_df["Risk_Level"] == "High Risk"].sort_values(by="Churn_Probability", ascending=False).head(1000)
         medium_risk_df = result_df[result_df["Risk_Level"] == "Medium Risk"].sort_values(by="Churn_Probability", ascending=False).head(1000)
         low_risk_df = result_df[result_df["Risk_Level"] == "Low Risk"].sort_values(by="Churn_Probability", ascending=False).head(1000)
         
-        # Combine them
         preview_df = pd.concat([high_risk_df, medium_risk_df, low_risk_df])
-        
-        # Sort the combined preview by its index to preserve the original dataset order
         preview_df = preview_df.sort_index()
         
-        # Replace NaN/Inf with None for JSON compatibility on the 1000 preview rows ONLY
         clean_preview_df = preview_df.replace([float('inf'), float('-inf')], float('nan'))
         clean_preview_df = clean_preview_df.astype(object).where(pd.notnull(clean_preview_df), None)
-        
-        # Convert to JSON records with standard Python types
         records = clean_preview_df.to_dict(orient="records")
         
-        # Calculate summary metrics
         total = len(result_df)
         churn_count = int(result_df["Churn_Prediction"].sum())
         retained_count = total - churn_count
@@ -161,7 +143,6 @@ async def bulk_predict_api(file: UploadFile = File(...)):
         medium_risk = len(result_df[result_df["Risk_Level"] == "Medium Risk"])
         low_risk = total - high_risk - medium_risk
         
-        # Calculate probability buckets for the entire dataset
         prob_series = result_df["Churn_Probability"]
         prob_buckets = [
             int((prob_series < 20).sum()),
@@ -171,14 +152,12 @@ async def bulk_predict_api(file: UploadFile = File(...)):
             int((prob_series >= 80).sum())
         ]
         
-        # Calculate churn reasons distribution for the entire dataset
         reason_counts = {}
         at_risk_df = result_df[(result_df["Risk_Level"] != "Low Risk") & (result_df["Possible_Reasons"] != "Normal")]
         if not at_risk_df.empty:
             reasons_series = at_risk_df["Possible_Reasons"].str.split(", ").explode()
             reason_counts = reasons_series.value_counts().to_dict()
         
-        # Ensure summary values are JSON safe
         accuracy_val = round(accuracy * 100, 2) if accuracy else 0
         if math.isnan(accuracy_val) or math.isinf(accuracy_val):
             accuracy_val = 0
@@ -204,7 +183,6 @@ async def bulk_predict_api(file: UploadFile = File(...)):
             }
         }
 
-        # Store for download
         LAST_ANALYSIS_RESULTS = result_df
         
         return {
@@ -261,20 +239,16 @@ async def get_customer(customer_id: str):
     df = LAST_ANALYSIS_RESULTS
     keys = list(df.columns)
     
-    # 1. Exact matches (highest priority)
     exact_matches = ['customerID', 'CustomerID', 'Customer_ID', 'id', 'ID', 'cid', 'CID', 'CustID']
     id_col = next((k for k in keys if k in exact_matches), None)
     
-    # 2. Partial matches (excluding prediction features)
     if not id_col:
         feature_keywords = ['tfidf', 'score', 'probability', 'prob', 'rate', 'prediction', 'result']
         id_col = next((k for k in keys if 'id' in k.lower() and not any(fk in k.lower() for fk in feature_keywords)), None)
         
-    # 3. Surname fallback
     if not id_col and 'Surname' in keys:
         id_col = 'Surname'
         
-    # 4. Fallback: first column that isn't a prediction result
     if not id_col:
         reserved = ['Churn_Prediction', 'Churn_Probability', 'Risk_Level', 'Possible_Reasons']
         id_col = next((k for k in keys if k not in reserved), None)
@@ -282,7 +256,6 @@ async def get_customer(customer_id: str):
     if not id_col:
         raise HTTPException(status_code=404, detail="Could not identify Customer ID column in the dataset.")
         
-    # Case-insensitive string search
     match_mask = df[id_col].astype(str).str.strip().str.lower() == customer_id.strip().lower()
     match_df = df[match_mask]
     
@@ -291,7 +264,6 @@ async def get_customer(customer_id: str):
         
     customer_record = match_df.iloc[0].to_dict()
     
-    # Ensure NaN/Inf values are replaced with None for JSON compliance
     for k, v in list(customer_record.items()):
         if isinstance(v, float):
             if math.isnan(v) or math.isinf(v):
@@ -302,7 +274,6 @@ async def get_customer(customer_id: str):
     return {"status": "success", "customer": customer_record}
 
 
-# Mount static files (frontend)
 app.mount("/", StaticFiles(directory=str(BASE_DIR / "frontend"), html=True), name="frontend")
 
 if __name__ == "__main__":

@@ -22,20 +22,16 @@ def train_models(csv_path: str) -> dict:
         dict: A package containing the best trained model and its associated metadata.
     """
 
-    # -----------------------------
-    # 1. LOAD DATA
-    # -----------------------------
+    # Load data
     df = pd.read_csv(csv_path, low_memory=False)
 
-    # Downsample if dataset is very large to speed up training and prevent timeouts (e.g. Render 30s limit)
+    # Downsample large datasets for faster training
     if len(df) > 20000:
         df_train = df.sample(n=20000, random_state=42)
     else:
         df_train = df
 
-    # -----------------------------
-    # 2. PREPROCESS DATA
-    # -----------------------------
+    # Preprocess data
     (
         X_train,
         X_test,
@@ -47,9 +43,7 @@ def train_models(csv_path: str) -> dict:
         target_encoder
     ) = preprocess_data(df_train)
 
-    # -----------------------------
-    # 3. DEFINE MODELS (OPTIMIZED FOR SPEED)
-    # -----------------------------
+    # Define candidate models
     models = {
         "Logistic Regression": LogisticRegression(max_iter=300, tol=1e-2, n_jobs=1, random_state=42),
         "Decision Tree": DecisionTreeClassifier(max_depth=12, random_state=42),
@@ -60,9 +54,7 @@ def train_models(csv_path: str) -> dict:
     best_accuracy = 0
     best_model_name = ""
 
-    # -----------------------------
-    # 4. TRAIN & EVALUATE
-    # -----------------------------
+    # Train and evaluate each model
     for name, model in models.items():
         print(f"\nTraining {name}...")
         model.fit(X_train, y_train)
@@ -79,9 +71,7 @@ def train_models(csv_path: str) -> dict:
             best_model = model
             best_model_name = name
 
-    # -----------------------------
-    # 5. CALCULATE FEATURE IMPORTANCE
-    # -----------------------------
+    # Compute feature importance
     importance_data = {}
     if hasattr(best_model, "feature_importances_"):
         importance_data = dict(zip(feature_names, best_model.feature_importances_))
@@ -93,9 +83,7 @@ def train_models(csv_path: str) -> dict:
     sorted_importance = sorted(importance_data.items(), key=lambda x: x[1], reverse=True)[:10]
     final_importance = [{"feature": f, "importance": float(i)} for f, i in sorted_importance]
 
-    # -----------------------------
-    # 6. SAVE BEST MODEL
-    # -----------------------------
+    # Save the best model and metadata
     models_folder = Path("models")
     models_folder.mkdir(exist_ok=True)
 
